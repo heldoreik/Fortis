@@ -5,7 +5,7 @@ source ./Ui.sh
 
 
 
-if [[ -d "$BACKUP_DIR" ]]; then
+if [[ ! -d "$BACKUP_DIR" ]]; then
     mkdir $BACKUP_DIR
 fi
 

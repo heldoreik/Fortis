@@ -8,21 +8,19 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-OS=$(source /etc/os-release && echo "$PRETTY_NAME")                                     #Ubuntu 26.04 LTS
-#CurrentUSer=$USER                                                                      #kragua
-RootSSHLogin=$(sudo sshd -T | grep -i "^permitrootlogin" | awk '{print $2}')            #prohibit-password
-PasswordAuth=$(sudo sshd -T | grep -i "^passwordauthentication" | awk '{print $2}')     #yes
-SSHPort=$(sudo sshd -T | grep -i "^port" | awk '{print $2}')                            #22
-AdminUser=$(groups $USER | awk '{print $6}' | grep -i "^sudo")                          #sudo #временно
+BusyPort=$(ss -tuln | awk 'NR>1 {print $5}' | awk -F':' '{print $NF}' | sort -u)
+OS=$(source /etc/os-release && echo "$PRETTY_NAME")                                                 #Ubuntu 26.04 LTS
+CurrentUSer=${SUDO_USER:-$(id -un)}                                                                 #kragua
+RootSSHLogin=$(sshd -T 2>/dev/null| grep -i "^permitrootlogin" | awk '{print $2}')                  #prohibit-password
+PasswordAuth=$(sshd -T 2>/dev/null| grep -i "^passwordauthentication" | awk '{print $2}')           #yes
+SSHPort=$(sshd -T 2>/dev/null| grep -i "^port" | awk '{print $2}')                                  #22
+AdminUser=$(groups $USER | awk '{print $6}' | grep -i "^sudo")                                      #sudo #временно
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_DIR="$SCRIPT_DIR/backups"
+SUDO_USERS=$(getent group sudo | sed -E "s/sudo:x:27://")
 
-if [[ "$PasswordAuth" == "yes" ]]; then
-    PasswordAuthStatus="${RED}ON${NC}"
-else
-    PasswordAuthStatus="${GREEN}OFF${NC}"
-fi
 
-if [[ "$RootSSHLogin" == "prohibit-password" ]]; then
-    RootSSHLoginStatus="${RED}OFF${NC}"
-else
-    RootSSHLoginStatus="{GREEN}ON${NC}"
+if [[ ! -d "/run/sshd" ]]; then
+    mkdir -p /run/sshd &>/dev/null
+    chmod 0755 /run/sshd &>/dev/null
 fi

@@ -1,3 +1,4 @@
 *.log
 config
 .env
+/backups

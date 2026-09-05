@@ -38,7 +38,7 @@ Access to your server console/recovery environment in case SSH becomes unavailab
 DO NOT close your current SSH session until you have successfully established a second SSH connection.
 
 Incorrect configuration of SSH, firewall, or authentication settings may result in loss of access to your server.${NC}"
-    read -r -p "Сontinue? [y/N] " warninganswer
+    read -r -p "Continue? [y/N] " warninganswer
     warninganswer="${warninganswer,,}"
     case $warninganswer in
         y|yes)
@@ -82,9 +82,9 @@ while true; do
     echo -e "q. ${YELLOW}Exit${NC}"
     echo
     echo -ne "${WHITE}Your choice:${NC} "
-    read choice
+    read -r choice
 
-    if [[ "$WARNINGBACKUP" == "true" ]]; then
+    if [[ "$WARNINGBACKUP" == "true" && "$choice" =~ ^[123]$ ]]; then
         if [[ "$backupexists" == "false" ]]; then
             echo -e "${RED}⚠ WARNING${NC}"
             echo
@@ -183,7 +183,7 @@ while true; do
                     while true; do
                         if [[ "$PasswordAuth" == "yes" ]]; then
                            if grep -qiE '^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+' /etc/ssh/sshd_config; then
-                                    sed -i -E "s/^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+.*/passwordauthentication no/" /etc/ssh/sshd_config 
+                                    sed -i -E "s/^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+.*/passwordauthentication no/I" /etc/ssh/sshd_config 
 
                             else 
                                 echo "passwordauthentication no" >> /etc/ssh/sshd_config
@@ -195,7 +195,7 @@ while true; do
 
                         elif [[ "$PasswordAuth" == "no" ]]; then
                             if grep -qiE '^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+' /etc/ssh/sshd_config; then
-                                    sed -i -E "s/^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+.*/passwordauthentication yes/" /etc/ssh/sshd_config 
+                                    sed -i -E "s/^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+.*/passwordauthentication yes/I" /etc/ssh/sshd_config 
 
                             else 
                                 echo "passwordauthentication yes" >> /etc/ssh/sshd_config
@@ -241,7 +241,7 @@ while true; do
                                 echo -e "${YELLOW}This port is already used. Choose another one.${NC} "
                             else
                                 if grep -qiE '^[[:space:]]*#?[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config; then
-                                    sed -i -E "s/^[[:space:]]*#?[[:space:]]*Port[[:space:]]+.*/Port $portthreechoice/" /etc/ssh/sshd_config
+                                    sed -i -E "s/^[[:space:]]*#?[[:space:]]*Port[[:space:]]+.*/Port $portthreechoice/I" /etc/ssh/sshd_config
                                 else
                                     echo "Port $portthreechoice" >> /etc/ssh/sshd_config
                                 fi
@@ -335,6 +335,7 @@ while true; do
                         fi
 
                         echo "$typesshkey" >> /home/$typename/.ssh/authorized_keys
+                        chown -R "$typename:$typename" "/home/$typename/.ssh"
                         echo -e "${GREEN}SSH-key has been added successfully${NC}"
                         break
                     else 
@@ -370,14 +371,18 @@ while true; do
                     
                     ;;
                 *)
-                    exit 1
+                    exit 0
                     ;;
             esac
 
         fi
 
-        systemctl reload ssh
-        echo -e "${GREEN}Changes has been applyed successfully${NC}"
+        if ! sshd -t; then
+            echo -e "${RED}Config invalid. Restoring backup${NC}"
+            cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config
+            continue
+        fi
+        systemctl reload ssh && echo -e "${GREEN}Applied${NC}" || echo -e "${RED}Reload failed${NC}"
         ;;
 
 

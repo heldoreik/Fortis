@@ -1,12 +1,12 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-BOLD='\033[1m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+WHITE=$'\033[1;37m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
 
 BusyPort=$(ss -tuln | awk 'NR>1 {print $5}' | awk -F':' '{print $NF}' | sort -u)
 OS=$(source /etc/os-release && echo "$PRETTY_NAME")                                                 #Ubuntu 26.04 LTS
@@ -17,7 +17,7 @@ SSHPort=$(sshd -T 2>/dev/null| grep -i "^port" | awk '{print $2}')              
 AdminUser=$(groups $USER | awk '{print $6}' | grep -i "^sudo")                                      #sudo #временно
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="$SCRIPT_DIR/backups"
-SUDO_USERS=$(getent group sudo | sed -E "s/sudo:x:27://")
+SUDO_USERS=$(getent group sudo | cut -d: -f4)
 
 
 if [[ ! -d "/run/sshd" ]]; then

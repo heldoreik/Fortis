@@ -1,11 +1,4 @@
 #!/bin/bash
-source ./Ui.sh 
-source ./config.conf
-source ./RootSSHLogin.sh
-source ./PasswordAuth.sh
-source ./SSHPort.sh
-source ./Backup.sh
-source ./AdminUser.sh
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -14,6 +7,17 @@ CYAN=$'\033[0;36m'
 WHITE=$'\033[1;37m'
 BOLD=$'\033[1m'
 NC=$'\033[0m'
+
+
+source ./Ui.sh 
+source ./config.conf
+source ./RootSSHLogin.sh
+source ./PasswordAuth.sh
+source ./SSHPort.sh
+source ./Backup.sh
+source ./AdminUser.sh
+
+
 
 if [[ $(whoami) != "root" ]]; then
     echo -e "${RED}This script must be run as root.${NC}"
@@ -57,8 +61,6 @@ while true; do
     echo "[+] OS: $OS"
     echo "[+] Current user: $CurrentUSer"
     echo
-    echo "Security configuration"
-    echo
     echo -e "1. ${CYAN}Root SSH login${NC}              [$RootSSHLoginStatus]"
     echo -e "2. ${CYAN}Password authentication${NC}     [$PasswordAuthStatus]"
     echo -e "3. ${CYAN}SSH port${NC}                    [$SSHPortStatus]"
@@ -72,7 +74,10 @@ while true; do
     echo -e "10. ${CYAN}Run security audit${NC}"
     echo -e "11. ${CYAN}Confirm successful SSH connection${NC}"
     echo -e "12. ${CYAN}Rollback configuration${NC}"
-    echo -e "13. ${RED}Create SSH Backup${NC}"
+    echo
+    echo -e "13. ${YELLOW}Create SSH Backup${NC}"
+    echo -e "14. ${YELLOW}Use backup${NC}"
+    echo -e "15. ${YELLOW}Apply changes${NC}"
     echo
     echo -e "q. ${YELLOW}Exit${NC}"
     echo
@@ -171,13 +176,13 @@ while true; do
             ;;
         
         2)
-            read -r -p "Do you want to turn on/off Password auth? [y/N] " twochoice
+            read -r -p "Do you want to turn ${PasswordAuthStatusturn} Password auth? [y/N] " twochoice
             twochoice="${twochoice,,}"
             case "$twochoice" in
                 y|yes)
                     while true; do
                         if [[ "$PasswordAuth" == "yes" ]]; then
-                           if grep -qE '^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+' /etc/ssh/sshd_config; then
+                           if grep -qiE '^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+' /etc/ssh/sshd_config; then
                                     sed -i -E "s/^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+.*/passwordauthentication no/" /etc/ssh/sshd_config 
 
                             else 
@@ -189,7 +194,7 @@ while true; do
                             echo -e "${GREEN}PasswordAuth has been changed successfully${NC}"
 
                         elif [[ "$PasswordAuth" == "no" ]]; then
-                            if grep -qE '^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+' /etc/ssh/sshd_config; then
+                            if grep -qiE '^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+' /etc/ssh/sshd_config; then
                                     sed -i -E "s/^[[:space:]]*#?[[:space:]]*passwordauthentication[[:space:]]+.*/passwordauthentication yes/" /etc/ssh/sshd_config 
 
                             else 
@@ -226,12 +231,16 @@ while true; do
                 y|yes)
                     while true; do
                         read -r -p "Which port do you prefer? " portthreechoice
+                        if [[ "$portthreechoice" == "q" || "$portthreechoice" == "Q" ]]; then
+                        break
+                        fi
+
                         if [[ "$portthreechoice" =~ ^[0-9]+$ ]] && [[ "$portthreechoice" -ge 1 ]] && [[ "$portthreechoice" -le 65535 ]]; then 
                             source ./Ui.sh
                             if echo "$BusyPort" | grep -qww "$portthreechoice"; then
                                 echo -e "${YELLOW}This port is already used. Choose another one.${NC} "
                             else
-                                if grep -qE '^[[:space:]]*#?[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config; then
+                                if grep -qiE '^[[:space:]]*#?[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config; then
                                     sed -i -E "s/^[[:space:]]*#?[[:space:]]*Port[[:space:]]+.*/Port $portthreechoice/" /etc/ssh/sshd_config
                                 else
                                     echo "Port $portthreechoice" >> /etc/ssh/sshd_config
@@ -264,6 +273,10 @@ while true; do
             y|yes)
                 while true; do
                     read -r -p "Enter new username: " username
+                    if [[ "$username" == "q" || "$username" == "Q" ]]; then
+                    break
+                    fi
+
                     if id "$username" &>/dev/null; then
                         echo -e "${YELLOW}User '$username' already exists${NC}"
                     else
@@ -297,8 +310,14 @@ while true; do
                 while true; do
                     echo "$SUDO_USERS"
                     read -r -p "Please choose one of sudo users [type name]: " typename
+                    if [[ "$typename" == "q" || "$typename" == "Q" ]]; then
+                    break
+
+                    fi
+
                     if [ -z "$SUDO_USERS" ]; then
                         echo -e "${RED}No sudo users found!${NC}"
+                        break
                     fi
 
                     if echo "$SUDO_USERS" | grep -qw "$typename"; then
@@ -330,6 +349,41 @@ while true; do
                 echo -e "${YELLOW}Incorrect${NC}"
                 ;;
         esac
+        ;;
+    
+    15)
+        if [[ "$backupexists" = false ]]; then 
+            read -r -p "${RED}Do you want to apply changes without backup?${NC} [y/N] " twobackupexistsanswer
+            twobackupexistsanswer="${twobackupexistsanswer,,}"
+            case "$twobackupexistsanswer" in
+                y|yes)
+                    :
+                    ;;
+                n|no)
+                    if [[ ! -d "$BACKUP_DIR" ]]; then
+                        mkdir "$BACKUP_DIR" &>/dev/null
+                    fi
+
+                    cp /etc/ssh/sshd_config "$BACKUP_DIR"
+                    source ./Backup.sh
+                    echo -e "${GREEN}Backup has been created successfully${NC}"
+                    
+                    ;;
+                *)
+                    exit 1
+                    ;;
+            esac
+
+        fi
+
+        systemctl reload ssh
+        echo -e "${GREEN}Changes has been applyed successfully${NC}"
+        ;;
+
+
+    
+    q|Q)
+        exit 1
         ;;
 
 

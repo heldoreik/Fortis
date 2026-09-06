@@ -1,4 +1,5 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -9,14 +10,14 @@ BOLD=$'\033[1m'
 NC=$'\033[0m'
 
 
-source ./Ui.sh 
-source ./config.conf
-source ./RootSSHLogin.sh
-source ./PasswordAuth.sh
-source ./SSHPort.sh
-source ./Backup.sh
-source ./AdminUser.sh
-source ./Firewall.sh
+source "$SCRIPT_DIR/Ui.sh"
+source "$SCRIPT_DIR/config.conf"
+source "$SCRIPT_DIR/RootSSHLogin.sh"
+source "$SCRIPT_DIR/PasswordAuth.sh"
+source "$SCRIPT_DIR/SSHPort.sh"
+source "$SCRIPT_DIR/Backup.sh"
+source "$SCRIPT_DIR/AdminUser.sh"
+source "$SCRIPT_DIR/Firewall.sh"
 
 
 

@@ -16,6 +16,7 @@ source ./PasswordAuth.sh
 source ./SSHPort.sh
 source ./Backup.sh
 source ./AdminUser.sh
+source ./Firewall.sh
 
 
 
@@ -66,7 +67,7 @@ while true; do
     echo -e "3. ${CYAN}SSH port${NC}                    [$SSHPortStatus]"
     echo -e "4. ${CYAN}Administrative user${NC}         [$Adminuser]"
     echo -e "5. ${CYAN}SSH public key${NC}              [${YELLOW}IDK${NC}]"
-    echo -e "6. ${CYAN}Firewall${NC}                    [UFW]"
+    echo -e "6. ${CYAN}Firewall${NC}                    [$FirewallStatus]"
     echo -e "7. ${CYAN}Fail2Ban${NC}                    [ON]"
     echo -e "8. ${CYAN}Automatic updates${NC}           [ON]"
     echo -e "9. ${CYAN}Kernel hardening${NC}            [OFF]"
@@ -230,6 +231,15 @@ while true; do
             case "$threechoice" in
                 y|yes)
                     while true; do
+                        if [[ -n "$ACTIVE_FW" ]]; then 
+                            read -r -p "${RED}PLEASE TURN OFF YOUR FIREWALL BEFORE CHANGING PORT. OKAY? [y/N]${NC} " turnofffw
+                            turnofffw="${turnofffw,,}"
+                            if [[ "$turnofffw" == "y" || "$turnofffw" == "yes" ]]; then
+                                :
+                            else 
+                                break
+                            fi
+                        fi
                         read -r -p "Which port do you prefer? " portthreechoice
                         if [[ "$portthreechoice" == "q" || "$portthreechoice" == "Q" ]]; then
                         break
@@ -237,7 +247,7 @@ while true; do
 
                         if [[ "$portthreechoice" =~ ^[0-9]+$ ]] && [[ "$portthreechoice" -ge 1 ]] && [[ "$portthreechoice" -le 65535 ]]; then 
                             source ./Ui.sh
-                            if echo "$BusyPort" | grep -qww "$portthreechoice"; then
+                            if echo "$BusyPort" | grep -qw "$portthreechoice"; then
                                 echo -e "${YELLOW}This port is already used. Choose another one.${NC} "
                             else
                                 if grep -qiE '^[[:space:]]*#?[[:space:]]*Port[[:space:]]+' /etc/ssh/sshd_config; then
@@ -351,6 +361,237 @@ while true; do
                 ;;
         esac
         ;;
+
+    6)
+        echo "What do you want to do with firewall?"
+        echo "1. ${CYAN}ENABLE Firewall${NC}"
+        echo "2. ${CYAN}DISABLE Firewall${NC}"
+        read -r -p "Your choice: " choicefirewall
+        case "$choicefirewall" in
+            1)
+                while true; do
+                    if [[ -n "$ACTIVE_FW" ]]; then
+                        read -r -p "${RED}Firewall is already running. Continue? [y/N]${NC} " fwrunch
+                        fwrunch="${fwrunch,,}"
+                        if [[ "$fwrunch" == "y" || "$fwrunch" == "yes" ]]; then
+                        :
+                        else
+                            break
+                        fi
+                    fi
+
+
+                    echo "1. ${CYAN}UFW${NC}"
+                    echo "2. ${CYAN}iptables${NC}"
+                    echo "3. ${CYAN}firewalld${NC}"
+                    echo "4. ${CYAN}nftables${NC}"
+                    read -r -p "Your choice: " choicefirewalltwo
+                    if [[ "$choicefirewalltwo" == "q" || "$choicefirewalltwo" == "Q" ]]; then
+                    break
+                    fi
+
+                    case "$choicefirewalltwo" in 
+                        1)
+                            if ! command -v ufw &>/dev/null; then
+                                read -r -p "UFW is not installed. Install it? [y/N] " UFWchoice
+                                UFWchoice="${UFWchoice,,}"
+                                if [[ "$UFWchoice" == "y" || "$UFWchoice" == "yes" ]]; then
+                                    if ! (apt update && apt install -y ufw); then
+                                        echo -e "${RED}Install failed. Try manually: sudo apt update && sudo apt install -y ufw${NC}"
+                                        break
+                                    fi
+                                else
+                                    break
+                                fi
+                            fi
+
+                            if [[ -n "$SSHPort" ]]; then
+                                ufw allow "${SSHPort}/tcp" &>/dev/null
+                            else
+                                echo -e "${RED}Could not detect SSH port - refusing to enable UFW${NC}"
+                                break
+                            fi
+                            [[ "$ALLOW_HTTP" == "true"  ]] && ufw allow 80/tcp  &>/dev/null
+                            [[ "$ALLOW_HTTPS" == "true" ]] && ufw allow 443/tcp &>/dev/null
+
+                            if ufw --force enable; then
+                                echo -e "${GREEN}UFW enabled. SSH port $SSHPort is allowed${NC}"
+                            else
+                                echo -e "${RED}Failed. Try manually: sudo ufw enable${NC}"
+                            fi
+                            source ./Firewall.sh
+                            break
+                            ;;
+                        2)
+                            if ! command -v iptables &>/dev/null; then
+                                read -r -p "iptables is not installed. Install it? [y/N] " IPTchoice
+                                IPTchoice="${IPTchoice,,}"
+                                if [[ "$IPTchoice" == "y" || "$IPTchoice" == "yes" ]]; then
+                                    if ! (apt update && DEBIAN_FRONTEND=noninteractive apt install -y iptables iptables-persistent); then
+                                        echo -e "${RED}Install failed. Try manually: sudo apt update && sudo apt install -y iptables iptables-persistent${NC}"
+                                        break
+                                    fi
+                                else
+                                    break
+                                fi
+                            elif ! command -v netfilter-persistent &>/dev/null; then
+                                DEBIAN_FRONTEND=noninteractive apt install -y iptables-persistent &>/dev/null || \
+                                    echo -e "${YELLOW}No iptables-persistent - rules will be lost on reboot${NC}"
+                            fi
+
+                            if [[ -z "$SSHPort" ]]; then
+                                echo -e "${RED}Could not detect SSH port - refusing to configure iptables${NC}"
+                                break
+                            fi
+
+                            iptables -C INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+                            iptables -C INPUT -i lo -j ACCEPT 2>/dev/null || iptables -A INPUT -i lo -j ACCEPT
+                            iptables -C INPUT -p tcp --dport "$SSHPort" -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport "$SSHPort" -j ACCEPT
+                            [[ "$ALLOW_HTTP" == "true" ]]  && { iptables -C INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 80 -j ACCEPT; }
+                            [[ "$ALLOW_HTTPS" == "true" ]] && { iptables -C INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport 443 -j ACCEPT; }
+                            iptables -P INPUT DROP
+                            iptables -P FORWARD DROP
+
+                            if command -v netfilter-persistent &>/dev/null; then
+                                netfilter-persistent save
+                                echo -e "${GREEN}iptables rules applied and saved. SSH port $SSHPort is allowed${NC}"
+                            else
+                                echo -e "${YELLOW}Rules applied but NOT saved - will be lost on reboot${NC}"
+                            fi
+                            source ./Firewall.sh
+                            break
+                            ;;
+                        3)
+                            if ! command -v firewall-cmd &>/dev/null; then
+                                read -r -p "firewalld is not installed. Install it? [y/N] " FWDchoice
+                                FWDchoice="${FWDchoice,,}"
+                                if [[ "$FWDchoice" == "y" || "$FWDchoice" == "yes" ]]; then
+                                    if ! (apt update && apt install -y firewalld); then
+                                        echo -e "${RED}Install failed. Try manually: sudo apt update && sudo apt install -y firewalld${NC}"
+                                        break
+                                    fi
+                                else
+                                    break
+                                fi
+                            fi
+
+                            if [[ -z "$SSHPort" ]]; then
+                                echo -e "${RED}Could not detect SSH port - refusing to enable firewalld${NC}"
+                                break
+                            fi
+
+                            if systemctl is-active --quiet firewalld; then
+                                firewall-cmd --permanent --add-port="${SSHPort}/tcp" &>/dev/null
+                                [[ "$ALLOW_HTTP" == "true" ]]  && firewall-cmd --permanent --add-service=http  &>/dev/null
+                                [[ "$ALLOW_HTTPS" == "true" ]] && firewall-cmd --permanent --add-service=https &>/dev/null
+                                firewall-cmd --reload &>/dev/null
+                                echo -e "${GREEN}firewalld rules updated. SSH port $SSHPort is allowed${NC}"
+                            else
+                                firewall-offline-cmd --add-port="${SSHPort}/tcp" &>/dev/null
+                                [[ "$ALLOW_HTTP" == "true" ]]  && firewall-offline-cmd --add-service=http  &>/dev/null
+                                [[ "$ALLOW_HTTPS" == "true" ]] && firewall-offline-cmd --add-service=https &>/dev/null
+                                if systemctl enable --now firewalld; then
+                                    echo -e "${GREEN}firewalld enabled. SSH port $SSHPort is allowed${NC}"
+                                else
+                                    echo -e "${RED}Failed. Try manually: sudo systemctl enable --now firewalld${NC}"
+                                fi
+                            fi
+                            source ./Firewall.sh
+                            break
+                            ;;
+                        4)
+                            if ! command -v nft &>/dev/null; then
+                                read -r -p "nftables is not installed. Install it? [y/N] " NFTchoice
+                                NFTchoice="${NFTchoice,,}"
+                                if [[ "$NFTchoice" == "y" || "$NFTchoice" == "yes" ]]; then
+                                    if ! (apt update && apt install -y nftables); then
+                                        echo -e "${RED}Install failed. Try manually: sudo apt update && sudo apt install -y nftables${NC}"
+                                        break
+                                    fi
+                                else
+                                    break
+                                fi
+                            fi
+
+                            if [[ -z "$SSHPort" ]]; then
+                                echo -e "${RED}Could not detect SSH port - refusing to configure nftables${NC}"
+                                break
+                            fi
+
+                            PORTS="$SSHPort"
+                            [[ "$ALLOW_HTTP" == "true" ]]  && PORTS="$PORTS, 80"
+                            [[ "$ALLOW_HTTPS" == "true" ]] && PORTS="$PORTS, 443"
+
+                            [[ -f /etc/nftables.conf ]] && cp /etc/nftables.conf "$BACKUP_DIR/nftables.conf"
+
+                            cat > /etc/nftables.conf << EOF
+                                    #!/usr/sbin/nft -f
+                                    flush ruleset
+
+                                    table inet filter {
+                                        chain input {
+                                            type filter hook input priority 0; policy drop;
+                                            iif "lo" accept
+                                            ct state established,related accept
+                                            tcp dport { $PORTS } accept
+                                        }
+                                        chain forward {
+                                            type filter hook forward priority 0; policy drop;
+                                        }
+                                        chain output {
+                                            type filter hook output priority 0; policy accept;
+                                        }
+                                    }
+EOF
+
+                            if nft -c -f /etc/nftables.conf &>/dev/null && nft -f /etc/nftables.conf; then
+                                systemctl enable --now nftables &>/dev/null
+                                echo -e "${GREEN}nftables enabled. SSH port $SSHPort is allowed${NC}"
+                            else
+                                echo -e "${RED}Config invalid - old rules kept. Check /etc/nftables.conf${NC}"
+                            fi
+                            source ./Firewall.sh
+                            break
+                            ;;
+                    esac
+                done
+                ;;
+            
+            2)
+                if [[ -z "$ACTIVE_FW" ]]; then
+                    echo -e "${YELLOW}No active firewall found${NC}"
+                else
+                    read -r -p "${RED}Active firewall:$ACTIVE_FW. Disable it? [y/N]${NC} " fwdis
+                    fwdis="${fwdis,,}"
+                    if [[ "$fwdis" == "y" || "$fwdis" == "yes" ]]; then
+                        if [[ "$ACTIVE_FW" == *ufw* ]]; then
+                            ufw disable && echo -e "${GREEN}UFW disabled${NC}"
+                        fi
+                        if [[ "$ACTIVE_FW" == *firewalld* ]]; then
+                            systemctl disable --now firewalld && echo -e "${GREEN}firewalld disabled${NC}"
+                        fi
+                        if [[ "$ACTIVE_FW" == *nftables* ]]; then
+                            nft flush ruleset
+                            systemctl disable --now nftables
+                            echo -e "${GREEN}nftables disabled${NC}"
+                        fi
+                        if [[ "$ACTIVE_FW" == *iptables* ]]; then
+                            iptables -P INPUT ACCEPT
+                            iptables -P FORWARD ACCEPT
+                            iptables -P OUTPUT ACCEPT
+                            iptables -F
+                            command -v netfilter-persistent &>/dev/null && netfilter-persistent save
+                            echo -e "${GREEN}iptables rules flushed${NC}"
+                        fi
+                        source ./Firewall.sh
+                    else
+                        echo "Cancelled"
+                    fi
+                fi
+                ;;
+        esac
+        ;;
+
     
     15)
         if [[ "$backupexists" = false ]]; then 
@@ -371,15 +612,20 @@ while true; do
                     
                     ;;
                 *)
-                    exit 0
+                    exit 1
                     ;;
             esac
 
         fi
 
         if ! sshd -t; then
-            echo -e "${RED}Config invalid. Restoring backup${NC}"
-            cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config
+            echo -e "${RED}Config invalid. NOT applied.${NC}"
+            if [[ -f "$BACKUP_DIR/sshd_config" ]]; then
+                cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config
+                echo -e "${GREEN}Backup restored${NC}"
+            else
+                echo -e "${RED}No backup to restore — fix /etc/ssh/sshd_config manually!${NC}"
+            fi
             continue
         fi
         systemctl reload ssh && echo -e "${GREEN}Applied${NC}" || echo -e "${RED}Reload failed${NC}"
@@ -388,7 +634,7 @@ while true; do
 
     
     q|Q)
-        exit 1
+        exit 0
         ;;
 
 

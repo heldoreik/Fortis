@@ -110,7 +110,7 @@ while true; do
                     fi
 
                     cp /etc/ssh/sshd_config "$BACKUP_DIR"
-                    source ./Backup.sh
+                    source "$SCRIPT_DIR/Backup.sh"
                     echo -e "${GREEN}Backup has been created successfully${NC}"
                     
                     ;;
@@ -160,7 +160,7 @@ while true; do
                             echo "PermitRootLogin $NEW_VAL" >> /etc/ssh/sshd_config
                         fi
 
-                        source ./RootSSHLogin.sh
+                        source "$SCRIPT_DIR/RootSSHLogin.sh"
                         echo -e "${GREEN}PermitRootLogin has been changed to '$NEW_VAL' successfully${NC}"
                     
                         break
@@ -192,7 +192,7 @@ while true; do
                             
                             fi
 
-                            source ./PasswordAuth.sh
+                            source "$SCRIPT_DIR/PasswordAuth.sh"
                             echo -e "${GREEN}PasswordAuth has been changed successfully${NC}"
 
                         elif [[ "$PasswordAuth" == "no" ]]; then
@@ -204,7 +204,7 @@ while true; do
                             
                             fi
                             
-                            source ./PasswordAuth.sh
+                            source "$SCRIPT_DIR/PasswordAuth.sh"
                             echo -e "${GREEN}PasswordAuth has been changed successfully${NC}"
 
                         else 
@@ -247,7 +247,7 @@ while true; do
                         fi
 
                         if [[ "$portthreechoice" =~ ^[0-9]+$ ]] && [[ "$portthreechoice" -ge 1 ]] && [[ "$portthreechoice" -le 65535 ]]; then 
-                            source ./Ui.sh
+                            source "$SCRIPT_DIR/Ui.sh"
                             if echo "$BusyPort" | grep -qw "$portthreechoice"; then
                                 echo -e "${YELLOW}This port is already used. Choose another one.${NC} "
                             else
@@ -257,7 +257,7 @@ while true; do
                                     echo "Port $portthreechoice" >> /etc/ssh/sshd_config
                                 fi
                         
-                                source ./SSHPort.sh
+                                source "$SCRIPT_DIR/SSHPort.sh"
                                 echo -e "${GREEN}Port has been changed successfully${NC}"
                                 break
                             fi
@@ -294,7 +294,7 @@ while true; do
                         useradd -m -s /bin/bash "$username"
                         usermod -aG sudo "$username"
                         passwd "$username"
-                        source ./AdminUser.sh
+                        source "$SCRIPT_DIR/AdminUser.sh"
                         echo -e "${GREEN}User has been successfully created${NC}"
                     fi
                 break
@@ -420,7 +420,7 @@ while true; do
                             else
                                 echo -e "${RED}Failed. Try manually: sudo ufw enable${NC}"
                             fi
-                            source ./Firewall.sh
+                            source "$SCRIPT_DIR/Firewall.sh"
                             break
                             ;;
                         2)
@@ -459,7 +459,7 @@ while true; do
                             else
                                 echo -e "${YELLOW}Rules applied but NOT saved - will be lost on reboot${NC}"
                             fi
-                            source ./Firewall.sh
+                            source "$SCRIPT_DIR/Firewall.sh"
                             break
                             ;;
                         3)
@@ -497,7 +497,7 @@ while true; do
                                     echo -e "${RED}Failed. Try manually: sudo systemctl enable --now firewalld${NC}"
                                 fi
                             fi
-                            source ./Firewall.sh
+                            source "$SCRIPT_DIR/Firewall.sh"
                             break
                             ;;
                         4)
@@ -551,7 +551,7 @@ EOF
                             else
                                 echo -e "${RED}Config invalid - old rules kept. Check /etc/nftables.conf${NC}"
                             fi
-                            source ./Firewall.sh
+                            source "$SCRIPT_DIR/Firewall.sh"
                             break
                             ;;
                     esac
@@ -584,7 +584,7 @@ EOF
                             command -v netfilter-persistent &>/dev/null && netfilter-persistent save
                             echo -e "${GREEN}iptables rules flushed${NC}"
                         fi
-                        source ./Firewall.sh
+                        source "$SCRIPT_DIR/Firewall.sh"
                     else
                         echo "Cancelled"
                     fi
@@ -608,7 +608,7 @@ EOF
                     fi
 
                     cp /etc/ssh/sshd_config "$BACKUP_DIR"
-                    source ./Backup.sh
+                    source "$SCRIPT_DIR/Backup.sh"
                     echo -e "${GREEN}Backup has been created successfully${NC}"
                     
                     ;;

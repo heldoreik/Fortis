@@ -17,7 +17,9 @@ source "$FORTIS_ROOT/lib/password-auth.sh"
 source "$FORTIS_ROOT/lib/ssh-port.sh" 
 source "$FORTIS_ROOT/lib/backup.sh" 
 source "$FORTIS_ROOT/lib/admin-user.sh" 
-source "$FORTIS_ROOT/lib/firewall.sh"  
+source "$FORTIS_ROOT/lib/firewall.sh"
+source "$FORTIS_ROOT/lib/ssh-public-key.sh"
+source "$FORTIS_ROOT/lib/fail2ban.sh"
 
 
 
@@ -67,9 +69,9 @@ while true; do
     echo -e "2. ${CYAN}Password authentication${NC}     [$PasswordAuthStatus]"
     echo -e "3. ${CYAN}SSH port${NC}                    [$SSHPortStatus]"
     echo -e "4. ${CYAN}Administrative user${NC}         [$Adminuser]"
-    echo -e "5. ${CYAN}SSH public key${NC}              [${YELLOW}IDK${NC}]"
+    echo -e "5. ${CYAN}SSH public key${NC}              [$sshkeystatus]"
     echo -e "6. ${CYAN}Firewall${NC}                    [$FirewallStatus]"
-    echo -e "7. ${CYAN}Fail2Ban${NC}                    [ON]"
+    echo -e "7. ${CYAN}Fail2Ban${NC}                    [$fail2banstatus]"
     echo -e "8. ${CYAN}Automatic updates${NC}           [ON]"
     echo -e "9. ${CYAN}Kernel hardening${NC}            [OFF]"
     echo
@@ -347,6 +349,7 @@ while true; do
 
                         echo "$typesshkey" >> /home/$typename/.ssh/authorized_keys
                         chown -R "$typename:$typename" "/home/$typename/.ssh"
+                        source "$FORTIS_ROOT/lib/ssh-public-key.sh"
                         echo -e "${GREEN}SSH-key has been added successfully${NC}"
                         break
                     else 
@@ -593,7 +596,89 @@ EOF
         esac
         ;;
 
-    
+    7)
+        while true; do
+            echo -e "1. ${CYAN}Turn ON${NC}"
+            echo -e "2. ${CYAN}Turn OFF${NC}"
+            echo -e "3. ${CYAN}Set standard settings${NC}"
+            read -r -p "What do you want to do with fail2ban? " fail2banchoice
+            case "$fail2banchoice" in
+                1)
+                    if ! command -v fail2ban-client &>/dev/null; then
+                        read -r -p "${YELLOW}Fail2ban is not installed. Install?${NC} [y/N] " fail2bantwo
+                        fail2bantwo="${fail2bantwo,,}"
+                        if [[ "$fail2bantwo" == "y" || "$fail2bantwo" == "yes" ]]; then
+                            if ! (apt update && apt install -y fail2ban); then
+                                echo -e "${RED}Install failed. Try manually: sudo apt update && sudo apt install -y fail2ban${NC}"
+                                break
+                            fi
+                            echo -e "${GREEN}Installed successfully${NC}"
+                        else
+                            break
+                        fi
+                    fi
+                    if systemctl enable --now fail2ban; then
+                        echo -e "${GREEN}Fail2ban enabled successfully${NC}"
+                    else
+                        echo -e "${RED}Enable failed. Try: sudo systemctl enable --now fail2ban${NC}"
+                    fi
+                    source "$FORTIS_ROOT/lib/fail2ban.sh"
+                    break
+                    ;;
+                2)
+                    if ! command -v fail2ban-client &>/dev/null; then
+                        echo -e "${YELLOW}Fail2ban is not installed - nothing to disable${NC}"
+                    else
+                        if systemctl disable --now fail2ban; then
+                            echo -e "${GREEN}Fail2ban disabled successfully${NC}"
+                        else
+                            echo -e "${RED}Disable failed. Try manually${NC}"
+                        fi
+                        source "$FORTIS_ROOT/lib/fail2ban.sh"
+                    fi
+                    break
+                    ;;
+                3)
+                    if ! command -v fail2ban-client &>/dev/null; then
+                        read -r -p "${YELLOW}Fail2ban is not installed. Install?${NC} [y/N] " fail2bantwo
+                        fail2bantwo="${fail2bantwo,,}"
+                        if [[ "$fail2bantwo" == "y" || "$fail2bantwo" == "yes" ]]; then
+                            if ! (apt update && apt install -y fail2ban); then
+                                echo -e "${RED}Install failed${NC}"
+                                break
+                            fi
+                        else
+                            break
+                        fi
+                    fi
+                    if grep -q '^\[sshd\]' /etc/fail2ban/jail.local 2>/dev/null; then
+                        echo -e "${YELLOW}sshd jail is already configured${NC}"
+                    else
+                        {
+                            echo "[sshd]"
+                            echo "enabled = true"
+                            echo "maxretry = ${FAIL2BAN_MAX_RETRIES:-5}"
+                            echo "bantime = ${FAIL2BAN_BAN_TIME:-10}m"
+                        } >> /etc/fail2ban/jail.local
+                    fi
+                    if systemctl restart fail2ban; then
+                        echo -e "${GREEN}Standard settings applied${NC}"
+                    else
+                        echo -e "${RED}Restart failed - check config: sudo fail2ban-client -t${NC}"
+                    fi
+                    source "$FORTIS_ROOT/lib/fail2ban.sh"
+                    break
+                    ;;
+                q|Q)
+                    break
+                    ;;
+                *)
+                    echo -e "${YELLOW}Incorrect option${NC}"
+                    ;;
+            esac
+        done
+        ;;
+
     15)
         if [[ "$backupexists" = false ]]; then 
             read -r -p "${RED}Do you want to apply changes without backup?${NC} [y/N] " twobackupexistsanswer

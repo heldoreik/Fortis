@@ -20,11 +20,12 @@ source "$FORTIS_ROOT/lib/admin-user.sh"
 source "$FORTIS_ROOT/lib/firewall.sh"
 source "$FORTIS_ROOT/lib/ssh-public-key.sh"
 source "$FORTIS_ROOT/lib/fail2ban.sh"
+source "$FORTIS_ROOT/lib/rollback.sh"
 
 
 
 if [[ $(whoami) != "root" ]]; then
-    echo -e "${RED}This script must be run as root.${NC}"
+    echo -e "${RED}This script must be run as sudo user.${NC}"
     exit 1
 fi
 
@@ -76,12 +77,9 @@ while true; do
     echo -e "9. ${CYAN}Kernel hardening${NC}            [OFF]"
     echo
     echo -e "10. ${CYAN}Run security audit${NC}"
-    echo -e "11. ${CYAN}Confirm successful SSH connection${NC}"
-    echo -e "12. ${CYAN}Rollback configuration${NC}"
+    echo -e "11. ${CYAN}Rollback configuration${NC}"
     echo
-    echo -e "13. ${YELLOW}Create SSH Backup${NC}"
-    echo -e "14. ${YELLOW}Use backup${NC}"
-    echo -e "15. ${YELLOW}Apply changes${NC}"
+    echo -e "12. ${YELLOW}Apply changes${NC}"
     echo
     echo -e "q. ${YELLOW}Exit${NC}"
     echo
@@ -657,8 +655,6 @@ EOF
                         {
                             echo "[sshd]"
                             echo "enabled = true"
-                            echo "maxretry = ${FAIL2BAN_MAX_RETRIES:-5}"
-                            echo "bantime = ${FAIL2BAN_BAN_TIME:-10}m"
                         } >> /etc/fail2ban/jail.local
                     fi
                     if systemctl restart fail2ban; then
@@ -678,8 +674,97 @@ EOF
             esac
         done
         ;;
+    
+    11)
+        while true; do
+            echo "1. ${CYAN}Create backup${NC}"
+            echo "2. ${CYAN}Restore backup${NC}"
+            echo "3. ${YELLOW}Rollback activate${NC}"
+            echo "4. ${CYAN}Disarm rollback${NC}"
+            echo
+            echo "q. ${YELLOW}Back${NC}"
+            read -r -p "${WHITE}Your choice:${NC} " rollbackchoice
+            case "$rollbackchoice" in
+                1)
+                    if [[ ! -d "$BACKUP_DIR" ]]; then
+                        mkdir "$BACKUP_DIR" &>/dev/null
+                    fi
 
-    15)
+                    if [[ -e "$BACKUP_DIR"/sshd_config ]]; then
+                        read -r -p "${YELLOW}SSH backup is already exists. Replace it?${NC}[y/N] " backupreplace
+                        backupreplace="${backupreplace,,}"
+                        case "$backupreplace" in
+                            y|yes)
+                                cp /etc/ssh/sshd_config "$BACKUP_DIR"
+                                source "$FORTIS_ROOT/lib/backup.sh"
+                                echo -e "${GREEN}SSH backup has been created successfully${NC}"
+                                break
+                                ;;
+                            *)
+                                break
+                                ;;
+                        esac
+                    else
+                        cp /etc/ssh/sshd_config "$BACKUP_DIR"
+                        source "$FORTIS_ROOT/lib/backup.sh"
+                        echo -e "${GREEN}SSH backup has been created successfully${NC}"
+                        break
+                    fi
+                    ;;
+                2)
+                    if [[ ! -e "$BACKUP_DIR/sshd_config" ]]; then
+                        echo -e "${RED}No backup found. Create one first${NC}"
+                        break
+                    fi
+                    if ! sshd -t -f "$BACKUP_DIR/sshd_config" 2>/dev/null; then
+                        echo -e "${RED}Backup config is INVALID. Refusing to restore${NC}"
+                        break
+                    fi
+                    if cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config; then
+                        source "$FORTIS_ROOT/lib/root-ssh-login.sh"
+                        source "$FORTIS_ROOT/lib/password-auth.sh"
+                        source "$FORTIS_ROOT/lib/ssh-port.sh"
+                        echo -e "${GREEN}Backup restored. Press 12 to apply${NC}"
+                    else
+                        echo -e "${RED}Restore failed${NC}"
+                    fi
+                    break
+                    ;;
+                3)
+                    if rollback_status; then 
+                        echo -e "${YELLOW}Rollback is already armed (${REMAINING}s left)${NC}"
+                    elif [[ ! -e "$BACKUP_DIR/sshd_config" ]]; then
+                        echo -e "${RED}No backup found. Create one first${NC}"
+                    else
+                        rollback_arm && echo -e "${GREEN}Rollback armed: ${ROLLBACK_TIMEOUT:-600}s. On fire: sshd_config restored, ALL firewalls disabled${NC}" || echo -e "${RED}Failed to arm${NC}"
+                    fi
+                    break
+                    ;;
+                4)
+                    if rollback_status; then
+                        rollback_disarm
+                        echo -e "${GREEN}Rollback disarmed — changes kept${NC}"
+                    else
+                        echo -e "${YELLOW}Rollback is not armed${NC}"
+                    fi
+                    break
+                    ;;
+                
+                q|Q)
+                    break
+                    ;;
+
+                *)
+                    echo -e "${YELLOW}Incorrect option${NC}"
+                    ;;
+
+            esac
+        done
+        ;;
+
+
+
+    12)
         if [[ "$backupexists" = false ]]; then 
             read -r -p "${RED}Do you want to apply changes without backup?${NC} [y/N] " twobackupexistsanswer
             twobackupexistsanswer="${twobackupexistsanswer,,}"
@@ -710,7 +795,7 @@ EOF
                 cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config
                 echo -e "${GREEN}Backup restored${NC}"
             else
-                echo -e "${RED}No backup to restore — fix /etc/ssh/sshd_config manually!${NC}"
+                echo -e "${RED}No backup to restore. Fix /etc/ssh/sshd_config manually!${NC}"
             fi
             continue
         fi

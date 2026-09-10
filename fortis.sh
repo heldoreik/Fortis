@@ -29,6 +29,20 @@ if [[ $(whoami) != "root" ]]; then
     exit 1
 fi
 
+if ! command -v sshd &>/dev/null; then
+    read -r -p "${YELLOW}openssh-server is not installed. Install it?${NC} [y/N] " installssh
+    installssh="${installssh,,}"
+    if [[ "$installssh" == "y" || "$installssh" == "yes" ]]; then
+        if ! (apt update && apt install -y openssh-server); then
+            echo -e "${RED}Install failed. Try manually: sudo apt update && sudo apt install -y openssh-server${NC}"
+        else
+            source "$FORTIS_ROOT/lib/ui.sh"
+        fi
+    else
+        echo -e "${RED}Fortis hardens the SSH server. Fortis will not work right without it${NC}"
+    fi
+fi
+
 if [[ "$WARNING" == "true" ]]; then
     echo -e "${RED}⚠ WARNING
 

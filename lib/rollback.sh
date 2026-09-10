@@ -8,7 +8,7 @@ if [[ "$1" == "EXEC" ]]; then
     if sshd -t -f "$BACKUP_DIR/sshd_config" 2>/dev/null; then
         cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config
         if systemctl is-active --quiet ssh.socket; then
-            systemctl restart ssh.socket
+            systemctl restart ssh.socket && echo "sshd_config restored, ssh.socket restarted"
         else
             systemctl reload ssh && echo "sshd_config restored and reloaded"
         fi 

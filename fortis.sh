@@ -821,7 +821,7 @@ EOF
             echo -e "${YELLOW}SSH daemon is not running${NC}"
             read -r -p "Enable and start ssh? [y/N] " startssh
             [[ "${startssh,,}" == "y" || "${startssh,,}" == "yes" ]] && systemctl enable --now ssh
-fi
+        fi
         ;;
 
 

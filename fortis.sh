@@ -813,7 +813,15 @@ EOF
             fi
             continue
         fi
-        systemctl reload ssh && echo -e "${GREEN}Applied${NC}" || echo -e "${RED}Reload failed${NC}"
+        if systemctl is-active --quiet ssh.socket; then
+            systemctl restart ssh.socket && echo -e "${GREEN}Applied (socket-activated sshd)${NC}" || echo -e "${RED}Failed${NC}"
+        elif systemctl is-active --quiet ssh.service; then
+            systemctl reload ssh && echo -e "${GREEN}Applied${NC}" || echo -e "${RED}Reload failed${NC}"
+        else
+            echo -e "${YELLOW}SSH daemon is not running${NC}"
+            read -r -p "Enable and start ssh? [y/N] " startssh
+            [[ "${startssh,,}" == "y" || "${startssh,,}" == "yes" ]] && systemctl enable --now ssh
+fi
         ;;
 
 

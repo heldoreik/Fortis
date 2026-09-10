@@ -7,7 +7,11 @@ if [[ "$1" == "EXEC" ]]; then
 
     if sshd -t -f "$BACKUP_DIR/sshd_config" 2>/dev/null; then
         cp "$BACKUP_DIR/sshd_config" /etc/ssh/sshd_config
-        systemctl reload ssh && echo "sshd_config restored and reloaded"
+        if systemctl is-active --quiet ssh.socket; then
+            systemctl restart ssh.socket
+        else
+            systemctl reload ssh && echo "sshd_config restored and reloaded"
+        fi 
     else
         echo "WARNING: backup sshd_config is INVALID, not restored"
     fi

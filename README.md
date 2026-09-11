@@ -1,7 +1,7 @@
 # Fortis [BETA]
-*tested on 
-Ubuntu 26.04.1 LTS
-Debian 13*
+*tested on*
+*Ubuntu 26.04.1 LTS*
+*Debian 13*
 
 Interactive Bash tool for basic Linux server hardening: SSH configuration, administrative users, firewall and Fail2Ban management — with safety nets like config backups, `sshd -t` validation, explicit apply and a systemd-based auto-rollback.
 
